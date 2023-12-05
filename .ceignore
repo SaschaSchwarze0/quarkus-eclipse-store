@@ -1,0 +1,8 @@
+.dockerignore
+.gitignore
+.vscode
+LICENSE
+mvnw.cmd
+target
+
+*.md

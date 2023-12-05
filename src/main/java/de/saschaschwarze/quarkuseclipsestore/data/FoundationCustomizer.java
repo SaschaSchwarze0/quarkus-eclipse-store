@@ -28,12 +28,24 @@ public class FoundationCustomizer implements EmbeddedStorageFoundationCustomizer
     public void customize(EmbeddedStorageFoundation<?> embeddedStorageFoundation) {
         LOGGER.info("customize({})", embeddedStorageFoundation);
 
-        final AWSCredentials credentials = new BasicIBMOAuthCredentials(System.getenv("COS_API_KEY_ID"), System.getenv("COS_SERVICE_CRN"));
+		final String cosInstanceId = System.getenv("CLOUD_OBJECT_STORAGE_RESOURCE_INSTANCE_ID");
+		final String cosBucketLocation = System.getenv("CLOUD_OBJECT_STORAGE_BUCKET_LOCATION");
+		final String cosBucketName = System.getenv("CLOUD_OBJECT_STORAGE_BUCKET_NAME");
+		final String cosEndpoint;
+		if (System.getenv("CE_DOMAIN") != null) {
+			// we run inside Code Engine and can use the direct endpoint
+			cosEndpoint = "s3.direct." + cosBucketLocation + ".cloud-object-storage.appdomain.cloud";
+		} else {
+			// we run locally and must use the public endpoint
+			cosEndpoint = "s3." + cosBucketLocation + ".cloud-object-storage.appdomain.cloud";
+		}
+
+        final AWSCredentials credentials = new BasicIBMOAuthCredentials(System.getenv("CLOUD_OBJECT_STORAGE_APIKEY"), cosInstanceId);
 		final ClientConfiguration clientConfig = new ClientConfiguration().withRequestTimeout(-1).withTcpKeepAlive(true);
-		
+
 		final AmazonS3 client = AmazonS3ClientBuilder.standard()
 			.withCredentials(new AWSStaticCredentialsProvider(credentials))
-			.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(System.getenv("COS_ENDPOINT"), System.getenv("COS_BUCKET_LOCATION")))
+			.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(cosEndpoint, cosBucketLocation))
 			.withPathStyleAccessEnabled(true)
 			.withClientConfiguration(clientConfig)
 			.build();
@@ -43,6 +55,8 @@ public class FoundationCustomizer implements EmbeddedStorageFoundationCustomizer
 			CosConnector.Caching(client)
 		);
 
-        embeddedStorageFoundation.setConfiguration(StorageConfiguration.Builder().setStorageFileProvider(Storage.FileProvider(cloudFileSystem.ensureDirectoryPath(System.getenv("COS_BUCKET_NAME")))).createConfiguration());
+		LOGGER.info("Connecting to bucket {} in COS instance {} using endpoint {}", cosBucketName, cosInstanceId, cosEndpoint);
+
+        embeddedStorageFoundation.setConfiguration(StorageConfiguration.Builder().setStorageFileProvider(Storage.FileProvider(cloudFileSystem.ensureDirectoryPath(cosBucketName))).createConfiguration());
     }
 }
